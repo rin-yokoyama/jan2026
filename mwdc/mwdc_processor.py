@@ -17,7 +17,7 @@ plane_shifts = [0.0, 0.0, 0.08, 0.15, -0.08, 0.0]
 center_id1 = 7.25
 center_id2 = 7.75
 dc31_x3_shift = 0.0
-dc31_y3_shift = 0.3
+dc31_y3_shift = -0.31
 
 def decode_mwdc_amaneq(spark: SparkSession, df: DataFrame) -> DataFrame:
     # Filter MWDC data and decode
@@ -188,7 +188,7 @@ def calib_mwdc_data(spark: SparkSession, df: DataFrame) -> DataFrame:
                     WHEN {plane1}_id0 = {plane2}_id0 AND {plane2}_dl > {cell_size}f/2.0f - ABS({diff}f) THEN
                         (CAST({plane1}_id0 AS FLOAT) - CAST({center_id1} AS FLOAT) + {shift1/cell_size}f) * {cell_size}f + {plane1}_dl
                     ELSE
-                        (CAST({plane2}_id0 AS FLOAT) - CAST({center_id2} AS FLOAT) + {shift2/cell_size}f) * {cell_size}f - {plane2}_dl     
+                        (CAST({plane1}_id0 AS FLOAT) - CAST({center_id1} AS FLOAT) + {shift1/cell_size}f) * {cell_size}f - {plane1}_dl     
                 END
                 """)
             ).withColumn(
@@ -224,9 +224,9 @@ def calib_mwdc_data(spark: SparkSession, df: DataFrame) -> DataFrame:
                     WHEN {plane1}_id0 = {plane2}_id0 THEN
                         (CAST({plane2}_id0 AS FLOAT) - CAST({center_id2} AS FLOAT) + {shift2/cell_size}f) * {cell_size}f + {plane2}_dl
                     WHEN {plane1}_id0 != {plane2}_id0 AND {plane2}_dl > {cell_size}f/2.0f - ABS({diff}f) THEN
-                        (CAST({plane2}_id0 AS FLOAT) - CAST({center_id2} AS FLOAT) + {shift2/cell_size}f) * {cell_size}f - {plane2}_dl
+                        (CAST({plane2}_id0 AS FLOAT) - CAST({center_id2} AS FLOAT) + {shift2/cell_size}f) * {cell_size}f + {plane2}_dl
                     ELSE
-                        (CAST({plane2}_id0 AS FLOAT) - CAST({center_id2} AS FLOAT) + {shift2/cell_size}f) * {cell_size}f + {plane2}_dl     
+                        (CAST({plane2}_id0 AS FLOAT) - CAST({center_id2} AS FLOAT) + {shift2/cell_size}f) * {cell_size}f - {plane2}_dl     
                 END
                 """)
             )
