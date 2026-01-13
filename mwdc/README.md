@@ -1,5 +1,16 @@
 # MWDC analysis
 ## Components
+ - mwdc_processor.py: Main analysis script to process raw parquet file to MWDC position data
+ - make_MWDC_prm.py: Function to generate drift time to distance conversion prm file by R. Kojima
+ - chkmwdc_pulser.ipynb: Notebook to check raw hit ch array vs charge array <br>
+   Input is raw parquet file (Output of streamingv1_to_parquet.py).
+ - chkmwdc.ipynb: Notebook to check wire data, charge vs timing, and hit correlation between planes <br>
+   It requires mwdc_processor.py output with `--output-wire-data` option.
+ - mwdc_calib.ipynb: Notebook to generate drift time to distance conversion using make_MWDC_prm.py <br>
+   It requires mwdc_processor.py output *without* `--output-wire-data` option.
+ - mwdc_13shift.ipynb: Notebook to check if there are offsets between (x1,x2)-(x3,x4) or (y1,y2)-(y3,y4) positions.
+ - map/: CSV files for TDC ch to strip id conversion.
+ - prm/: Drift time to distance conversion parameter files.
 
 ## 1. Generate wire data with mwdc_processor.py
 Assuming a raw data is already converted to a raw parquet file.
