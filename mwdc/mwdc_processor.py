@@ -40,7 +40,7 @@ def decode_mwdc_amaneq(spark: SparkSession, df: DataFrame) -> DataFrame:
     # Filter SRPPAC anode data and decode
     df_sra = df.filter("femType==5 and femId==615").select("data").withColumn("decoded",F.expr("decode_hrtdc_segdata(data)"))
     df_sra = df_sra.select("decoded.*").select("hbf.*","data").select("hbfNumber","data").filter("array_size(decoded.data)>0")
-    df_sra = df_sra.withColumn("ex",F.explode("data")).select("hbfNumber","ex.*").filter("ch==3")
+    df_sra = df_sra.withColumn("ex",F.explode("data")).select("hbfNumber","ex.*").filter("ch==0")
     df_sra = df_sra.withColumn("rand",F.rand().cast("float")).withColumn("tcal", (F.col("time").cast("float") + F.col("rand"))*F.lit(CH2NS).cast("float")).drop("time").drop("rand")
     df_sra = df_sra.withColumn("rand",F.rand().cast("float")).withColumn("sra_charge", (F.col("tot").cast("float") + F.col("rand"))*F.lit(CH2NS).cast("float")).drop("tot").drop("rand")
     df_sra = df_sra.withColumnRenamed("tcal","sra_timing").select("hbfNumber","sra_timing")
@@ -246,10 +246,10 @@ def calib_mwdc_data(spark: SparkSession, df: DataFrame) -> DataFrame:
     return rdf
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='process mwdc data')
+    parser = argparse.ArgumentParser(description='Decode raw parquet files and process MWDC data')
 
     parser.add_argument('input_file', help='input file')
-    parser.add_argument('--output-file', help='output file')
+    parser.add_argument('--output-file', help='output file (default: [input_file]_mwdc.parquet)')
     parser.add_argument('--output-wire-data', action='store_true', help='Output wire-by-wire hit data for calibration')
     args = parser.parse_args()
 
@@ -271,12 +271,15 @@ if __name__ == "__main__":
             .config("spark.driver.memory","20g") \
             .config("spark.executor.memory","20g") \
             .config("spark.sql.shuffle.partitions","32") \
+            .config("spark.jars","/home/h487/opt/spark-oedo/scala_package/target/scala-2.13/spark-oedo-package_2.13-1.0.jar,/home/h487/opt/rapids/rapids-4-spark_2.13-25.10.0.jar") \
+            .config("spark.rapids.sql.explain","NONE") \
             .config("spark.rapids.sql.concurrentGpuTasks","2") \
             .config("spark.rapids.memory.pinnedPool.size","2g") \
             .config("spark.sql.files.maxPartitionBytes","512m") \
             .config("spark.kryo.registrator","com.nvidia.spark.rapids.GpuKryoRegistrator") \
             .config("spark.plugins","com.nvidia.spark.SQLPlugin") \
             .config("spark.rapids.memory.gpu.allocFraction","0.8") \
+            .config("spark.rapids.memory.gpu.minAllocFraction","0.01") \
             .getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
 

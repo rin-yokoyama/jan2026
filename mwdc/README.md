@@ -1,4 +1,6 @@
 # MWDC analysis
+## Components
+
 ## 1. Generate wire data with mwdc_processor.py
 Assuming a raw data is already converted to a raw parquet file.
 ```
