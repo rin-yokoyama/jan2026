@@ -4,11 +4,12 @@ import argparse
 from pathlib import Path
 
 CH2NS = 0.0009765625 # AMANEQ HRTDC time unit to ns
-TIME_RANGE_NS = (-1000, 1000) # valid time range for SRPPAC strip hits after anode time subtraction and ns2ns conversion
+TIME_RANGE_NS = (-50, 100) # valid time range for SRPPAC strip hits after anode time subtraction and ns2ns conversion
 HIT_SIZE_LIMIT = 7 # maximum number of hit strips per event to accept
-HALF_STRIP_SIZE = (2.55 / 2.0, 2.58 / 2.0) # [x,y] mm
+HALF_STRIP_SIZE = (2.55 / 2.0, -2.58 / 2.0) # [x,y] mm
 CENTER_ID = (16, 16) # [x,y] strip id
-CALIB_RUNNAME = 'run1011'
+CALIB_RUNNAME = 'run1027'
+
 
 def decode_srppac_amaneq(spark: SparkSession, df: DataFrame, preamp_type: str) -> DataFrame:
     # Filter SRPPAC strip data and decode
@@ -20,7 +21,7 @@ def decode_srppac_amaneq(spark: SparkSession, df: DataFrame, preamp_type: str) -
     # Filter SRPPAC anode data and decode
     df_sra = df.filter("femType==5 and femId==614").select("data").withColumn("decoded",F.expr("decode_hrtdc_segdata(data)"))
     df_sra = df_sra.select("decoded.*").select("hbf.*","data").select("hbfNumber","data").filter("array_size(decoded.data)>0")
-    df_sra = df_sra.withColumn("ex",F.explode("data")).select("hbfNumber","ex.*").filter("ch==0")
+    df_sra = df_sra.withColumn("ex",F.explode("data")).select("hbfNumber","ex.*").filter("ch==4")
     df_sra = df_sra.withColumn("tcal", F.expr(f"(time + rand())*{CH2NS}")).drop("time")
     df_sra = df_sra.groupBy("hbfNumber").agg(F.min("tcal").alias("tcal_a")) # select fastest anode hit
 
@@ -31,7 +32,7 @@ def decode_srppac_amaneq(spark: SparkSession, df: DataFrame, preamp_type: str) -
 
     if preamp_type == "asagi":
         # Adjust tcal_c for asagi preamp type
-        df_sr = df_sr.withColumn("edge", F.expr("CASE WHEN channel % 2 = 0 THEN 1 - edge ELSE edge END"))
+        df_sr = df_sr.withColumn("edge", F.expr("CASE WHEN ch % 2 = 0 THEN 1 - edge ELSE edge END"))
 
     dfL = df_sr.filter("edge=0").select("hbfNumber","tcal_c","ch").withColumnRenamed("tcal_c","timingL")
     dfT = df_sr.filter("edge=1").select("hbfNumber","tcal_c","ch").withColumnRenamed("tcal_c","timingT")
@@ -50,8 +51,8 @@ def decode_srppac_amaneq(spark: SparkSession, df: DataFrame, preamp_type: str) -
     df_xy_list = []
     for df_map, df_prm in dfs:
         df_xy = df_sr.join(df_map, on = ["ch"]).drop("ch")
-        df_xy = df_xy.join(df_prm, on=["id"], how="left")
-        df_xy = df_xy.withColumn("charge", F.expr("charge * p1 + p0")).drop("p1").drop("p0")
+        #df_xy = df_xy.join(df_prm, on=["id"], how="left")
+        #df_xy = df_xy.withColumn("charge", F.expr("charge * p1 + p0")).drop("p1").drop("p0")
 
         df_xy = df_xy.orderBy(F.col("charge").desc()).groupBy("hbfNumber").agg(F.collect_list("id").alias("id"), F.collect_list("timingL").alias("timing"), F.collect_list("charge").alias("charge"))
         df_xy = df_xy.withColumn("size", F.expr("size(id)"))
@@ -61,14 +62,16 @@ def decode_srppac_amaneq(spark: SparkSession, df: DataFrame, preamp_type: str) -
                      .withColumn("charge2",F.expr(f"try_element_at(charge, 3)")) \
                      .withColumn("id0",F.expr(f"try_element_at(id, 1)")) \
                      .withColumn("id1",F.expr(f"try_element_at(id, 2)")) \
-                     .withColumn("id2",F.expr(f"try_element_at(id, 3)"))
+                     .withColumn("id2",F.expr(f"try_element_at(id, 3)")) \
+                     .withColumn("q0q1", F.expr("(charge0-charge1)/(charge0+charge1)"))
+        
         df_xy_list.append(df_xy)
 
     # Add suffix _y to all columns except hbfNumber
     df_xy_list[0] = df_xy_list[0].select([F.col(col).alias(f"{col}_x") if col != "hbfNumber" else F.col(col) for col in df_xy_list[0].columns])
     df_xy_list[1] = df_xy_list[1].select([F.col(col).alias(f"{col}_y") if col != "hbfNumber" else F.col(col) for col in df_xy_list[1].columns])
-    rdf = df_xy_list[0].join(df_xy_list[1], on=["hbfNumber"])
-
+    rdf = df_xy_list[0].join(df_xy_list[1], on=["hbfNumber"], how="outer")
+    
     return rdf, df_sra
 
 def calib_srppac_dqdx(spark: SparkSession, df: DataFrame) -> DataFrame:
@@ -101,16 +104,16 @@ def calib_srppac_dqdx(spark: SparkSession, df: DataFrame) -> DataFrame:
                          .drop("row_number")
 
         dfp = dfxy.join(df_conv, (dfxy.q0q1 >= df_conv.histy_x_prev) & (dfxy.q0q1 < df_conv.histy_x), how="left")
-        dfp = dfp.withColumn("randf", F.rand().cast("float")).withColumn("ins", F.expr(f"(tx_prev + (tx - tx_prev)*randf)*{HALF_STRIP_SIZE[i]}f")).drop("randf")
+        dfp = dfp.withColumn("randf", F.rand().cast("float")).withColumn("ins", F.expr(f"(tx_prev + (tx - tx_prev)*randf)*ABS({HALF_STRIP_SIZE[i]}f)")).drop("randf")
         
         # Calculate position
         dfp = dfp.withColumn("ins", F.expr("CASE WHEN id1 = id0 + 1 THEN ins ELSE -ins END"))
-        dfp = dfp.withColumn("pos", F.expr(f"({CENTER_ID[i]}f - id0) * {HALF_STRIP_SIZE[i]}f*2.0f + ins - {HALF_STRIP_SIZE[i]}f"))
+        dfp = dfp.withColumn("pos", F.expr(f"({CENTER_ID[i]}f - id0) * ABS({HALF_STRIP_SIZE[i]}f)*2.0f + ins - {HALF_STRIP_SIZE[i]}f"))
 
         dfp = dfp.select("hbfNumber","pos","ins").withColumnRenamed("pos",f"sr_pos_{planes[i]}").withColumnRenamed("ins",f"sr_ins_{planes[i]}")
         rdf = rdf.join(dfp, on=["hbfNumber"], how="left")
 
-    return rdf, df_sra
+    return rdf
 
 def calib_srppac_dqdxlr(spark: SparkSession, df: DataFrame) -> DataFrame:
     # Calibrate SRPPAC data

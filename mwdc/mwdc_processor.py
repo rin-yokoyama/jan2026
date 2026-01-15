@@ -7,17 +7,18 @@ CH2NS = 0.0009765625 # AMANEQ HRTDC time unit to ns
 
 planes = ['dc31_x1','dc31_x2','dc31_y1','dc31_y2','dc31_x3','dc31_x4','dc31_y3','dc31_y4','dc32_x1','dc32_x2','dc32_y1','dc32_y2']
 dc31_charge_range = [50,150]
-dc31_timing_range = [-35,15]
+dc31_timing_range = [-60,0]
 dc32_charge_range = [50,150]
-dc32_timing_range = [-35,15]
+dc32_timing_range = [-60,0]
 cell_size = 3.0
 half_cell_size = cell_size / 2.0
 planes_paires = [('dc31_x1', 'dc31_x2'), ('dc31_x3', 'dc31_x4'), ('dc31_y1', 'dc31_y2'), ('dc31_y3', 'dc31_y4'), ('dc32_x1', 'dc32_x2'), ('dc32_y1', 'dc32_y2')]
-plane_shifts = [0.0, 0.0, 0.08, 0.15, -0.08, 0.0]
+plane_shifts = [0.07, 0.04, 0.08, 0.15, -0.08, 0.0]
 center_id1 = 7.25
 center_id2 = 7.75
-dc31_x3_shift = 0.0
-dc31_y3_shift = -0.31
+dc31_x3_shift = 0.05
+dc31_y3_shift = -0.15
+runname="run1008"
 
 def decode_mwdc_amaneq(spark: SparkSession, df: DataFrame) -> DataFrame:
     # Filter MWDC data and decode
@@ -38,9 +39,9 @@ def decode_mwdc_amaneq(spark: SparkSession, df: DataFrame) -> DataFrame:
     # +-------------+----------+----+-------+--------+-------+-------+-----+-----------+----------+--------+--------+--------------------+
 
     # Filter SRPPAC anode data and decode
-    df_sra = df.filter("femType==5 and femId==615").select("data").withColumn("decoded",F.expr("decode_hrtdc_segdata(data)"))
+    df_sra = df.filter("femType==5 and femId==614").select("data").withColumn("decoded",F.expr("decode_hrtdc_segdata(data)"))
     df_sra = df_sra.select("decoded.*").select("hbf.*","data").select("hbfNumber","data").filter("array_size(decoded.data)>0")
-    df_sra = df_sra.withColumn("ex",F.explode("data")).select("hbfNumber","ex.*").filter("ch==0")
+    df_sra = df_sra.withColumn("ex",F.explode("data")).select("hbfNumber","ex.*").filter("ch==4") # anode channel is ch=4
     df_sra = df_sra.withColumn("rand",F.rand().cast("float")).withColumn("tcal", (F.col("time").cast("float") + F.col("rand"))*F.lit(CH2NS).cast("float")).drop("time").drop("rand")
     df_sra = df_sra.withColumn("rand",F.rand().cast("float")).withColumn("sra_charge", (F.col("tot").cast("float") + F.col("rand"))*F.lit(CH2NS).cast("float")).drop("tot").drop("rand")
     df_sra = df_sra.withColumnRenamed("tcal","sra_timing").select("hbfNumber","sra_timing")
@@ -154,7 +155,7 @@ def calib_mwdc_data(spark: SparkSession, df: DataFrame) -> DataFrame:
                  .withColumn("id0",F.expr(f"element_at({plane}_id, 1)"))
         
         # Monotone converter
-        df_conv = spark.read.csv(f"prm/{plane}_drift_calib_data.csv",inferSchema=True,header=True)
+        df_conv = spark.read.csv(f"prm/{plane}_drift_calib_data_{runname}.csv",inferSchema=True,header=True)
         df_conv = df_conv.withColumn("histy_x", F.col("histy_x").cast("float")) \
                          .withColumn("tx", F.col("tx").cast("float"))
         w = Window.orderBy(F.col("histy_x"))

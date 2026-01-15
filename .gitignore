@@ -1,3 +1,4 @@
 *.parquet
 *.log
 *.pyc
+/.ipynb_checkpoints
