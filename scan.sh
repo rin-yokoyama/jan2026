@@ -6,7 +6,6 @@ cd /home/h487/notebooks/jan2026/mwdc
 python mwdc_processor.py /home/h487/data/parquet/run${1}.parquet --output-file /home/h487/data/parquet/run${1}_mwdc.parquet #--output-wire-data 
 cd -
 
-
 cd /home/h487/notebooks/jan2026/srppac
 python srppac_processor.py /home/h487/data/parquet/run${1}.parquet --output-file /home/h487/data/parquet/run${1}_srppac.parquet --output-strip-data --preamp-type asagi
 #python join_mwdc_srppac.py /home/h487/data/parquet/run${1}

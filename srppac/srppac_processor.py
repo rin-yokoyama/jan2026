@@ -4,11 +4,11 @@ import argparse
 from pathlib import Path
 
 CH2NS = 0.0009765625 # AMANEQ HRTDC time unit to ns
-TIME_RANGE_NS = (-50, 100) # valid time range for SRPPAC strip hits after anode time subtraction and ns2ns conversion
+TIME_RANGE_NS = (-50, 300) # valid time range for SRPPAC strip hits after anode time subtraction and ns2ns conversion
 HIT_SIZE_LIMIT = 7 # maximum number of hit strips per event to accept
 HALF_STRIP_SIZE = (2.55 / 2.0, -2.58 / 2.0) # [x,y] mm
 CENTER_ID = (16, 16) # [x,y] strip id
-CALIB_RUNNAME = 'run1027'
+CALIB_RUNNAME = 'run1082'
 
 
 def decode_srppac_amaneq(spark: SparkSession, df: DataFrame, preamp_type: str) -> DataFrame:
@@ -165,7 +165,10 @@ if __name__ == "__main__":
     strip_count = df_srppac.filter('charge2_x > 0 AND charge2_y > 0 AND ABS(id0_x - id1_x) = 1 AND ABS(id0_y - id1_y) = 1 AND ABS(id0_x - id2_x) = 1 AND ABS(id0_y - id2_y) = 1').count()
     print(f"SRPPAC anode data count: {sra_count}")
     print(f"SRPPAC strip>2 data count: {strip_count}")
-    print(f"SRPPAC efficiency: {strip_count/sra_count*100:.2f} %")
+    if sra_count:
+        print(f"SRPPAC efficiency: {strip_count/sra_count*100:.2f} %")
+    else:
+        print("sra_count = 0")
     if not args.output_strip_data:
         df_srppac = calib_srppac_dqdx(spark, df_srppac)
 
